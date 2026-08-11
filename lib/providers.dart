@@ -85,6 +85,31 @@ class ImportedSongsNotifier extends Notifier<List<Song>> {
         .toList();
     await _saveToPrefs();
   }
+
+  // --- BAGONG METHODS PARA SA EDIT AT DELETE NG IMPORTED SONGS ---
+
+  Future<void> updateSongTitle(Song song, String newTitle) async {
+    state = state
+        .map((s) => s.identityKey == song.identityKey
+        ? s.copyWith(title: newTitle)
+        : s)
+        .toList();
+    await _saveToPrefs();
+  }
+
+  Future<void> updateSongArtist(Song song, String newArtist) async {
+    state = state
+        .map((s) => s.identityKey == song.identityKey
+        ? s.copyWith(artist: newArtist)
+        : s)
+        .toList();
+    await _saveToPrefs();
+  }
+
+  Future<void> removeSong(Song song) async {
+    state = state.where((s) => s.identityKey != song.identityKey).toList();
+    await _saveToPrefs();
+  }
 }
 
 final importedSongsProvider =

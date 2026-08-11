@@ -1,7 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show ReorderableListView, ReorderableDragStartListener;
+import 'package:flutter/material.dart' show ReorderableListView, ReorderableDragStartListener, Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'sample_data.dart';
 import 'song.dart';
@@ -23,6 +23,15 @@ class MusicLibrary extends ConsumerWidget {
     const audioTypeGroup = XTypeGroup(
       label: 'audio',
       extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+      // Idinagdag para makilala ng iOS file picker ang mga audio files
+      uniformTypeIdentifiers: [
+        'public.audio',
+        'public.mp3',
+        'com.microsoft.waveform-audio',
+        'public.mpeg-4-audio',
+        'org.xiph.flac',
+        'org.xiph.ogg-audio',
+      ],
     );
 
     final files = await openFiles(acceptedTypeGroups: [audioTypeGroup]);
@@ -44,6 +53,110 @@ class MusicLibrary extends ConsumerWidget {
     final file = await picker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
     await ref.read(importedSongsProvider.notifier).setSongCover(song, file.path);
+  }
+
+  Future<void> _editSongDetail(BuildContext context, WidgetRef ref, Song song, String dialogTitle, String initialValue, bool isTitle) async {
+    final controller = TextEditingController(text: initialValue);
+    final newValue = await showCupertinoDialog<String>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(dialogTitle),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(controller: controller, autofocus: true),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newValue != null && newValue.isNotEmpty && newValue != initialValue) {
+      if (isTitle) {
+        await ref.read(importedSongsProvider.notifier).updateSongTitle(song, newValue);
+      } else {
+        await ref.read(importedSongsProvider.notifier).updateSongArtist(song, newValue);
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteSong(BuildContext context, WidgetRef ref, Song song) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Delete Song'),
+        content: Text('Delete "${song.title}"? Hindi na ito mababawi.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(importedSongsProvider.notifier).removeSong(song);
+    }
+  }
+
+  void _showImportedSongOptions(BuildContext context, WidgetRef ref, Song song) {
+    ref.read(isModalOpenProvider.notifier).setOpen(true);
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _editSongDetail(context, ref, song, 'Edit Song Title', song.title, true);
+            },
+            child: const Text('Edit Song Title'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _editSongDetail(context, ref, song, 'Edit Artist', song.artist, false);
+            },
+            child: const Text('Edit Artist'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _changeSongCover(ref, song);
+            },
+            child: const Text('Change Cover Photo'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _confirmDeleteSong(context, ref, song);
+            },
+            child: const Text('Delete Song'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    ).then((_) {
+      ref.read(isModalOpenProvider.notifier).setOpen(false);
+    });
   }
 
   Future<void> _createPlaylist(BuildContext context, WidgetRef ref) async {
@@ -179,7 +292,7 @@ class MusicLibrary extends ConsumerWidget {
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               if (favoritesEmpty)
-                Text('Wala ka pang na-favorite.',
+                Text('No favorites yet.',
                     style: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.5)))
               else ...[
                 ...likedAlbums.map((album) => _LikedItemRow(
@@ -245,7 +358,7 @@ class MusicLibrary extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               if (sortedPlaylists.isEmpty)
-                Text('Wala ka pang playlist.',
+                Text('No playlists yet.',
                     style: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.5)))
               else
                 ...sortedPlaylists.map((p) => _PlaylistRow(playlist: p)),
@@ -260,7 +373,7 @@ class MusicLibrary extends ConsumerWidget {
                 ...importedSongs.map((song) => _SongRow(
                   song: song,
                   context: importedSongs,
-                  onChangeCover: () => _changeSongCover(ref, song),
+                  onOptionsTap: () => _showImportedSongOptions(context, ref, song),
                 )),
                 const SizedBox(height: 20),
               ],
@@ -290,6 +403,14 @@ class MusicLibrary extends ConsumerWidget {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: orderedAllSongs.length,
+                  proxyDecorator: (Widget child, int index, Animation<double> animation) {
+                    return Material(
+                      type: MaterialType.transparency,
+                      elevation: 0,
+                      color: CupertinoColors.transparent,
+                      child: child,
+                    );
+                  },
                   onReorder: (oldIndex, newIndex) {
                     final reordered = [...orderedAllSongs];
                     var target = newIndex;
@@ -547,10 +668,10 @@ class _PlaylistRow extends StatelessWidget {
 }
 
 class _SongRow extends ConsumerWidget {
-  const _SongRow({required this.song, required this.context, this.onChangeCover});
+  const _SongRow({required this.song, required this.context, this.onOptionsTap});
   final Song song;
   final List<Song> context;
-  final VoidCallback? onChangeCover;
+  final VoidCallback? onOptionsTap;
 
   @override
   Widget build(BuildContext buildContext, WidgetRef ref) {
@@ -609,12 +730,12 @@ class _SongRow extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (onChangeCover != null)
+              if (onOptionsTap != null)
                 GestureDetector(
-                  onTap: onChangeCover,
+                  onTap: onOptionsTap,
                   child: const Padding(
                     padding: EdgeInsets.only(left: 8),
-                    child: Icon(CupertinoIcons.photo,
+                    child: Icon(CupertinoIcons.ellipsis,
                         color: CupertinoColors.white, size: 20),
                   ),
                 ),

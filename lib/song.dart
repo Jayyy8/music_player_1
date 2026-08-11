@@ -29,14 +29,18 @@ class Song {
   }
 
   Song copyWith({
+    String? title,
+    String? artist,
+    String? assetPath,
+    String? filePath,
     String? coverImagePath,
     String? coverFilePath,
   }) {
     return Song(
-      title: title,
-      artist: artist,
-      assetPath: assetPath,
-      filePath: filePath,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      assetPath: assetPath ?? this.assetPath,
+      filePath: filePath ?? this.filePath,
       coverImagePath: coverImagePath ?? this.coverImagePath,
       coverFilePath: coverFilePath ?? this.coverFilePath,
     );

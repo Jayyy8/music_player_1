@@ -35,6 +35,7 @@ class CollapsedBarOverlay extends ConsumerWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
+            // Home Button
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -69,6 +70,8 @@ class CollapsedBarOverlay extends ConsumerWidget {
                 ),
               ),
             ),
+
+            // Search Button
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -94,6 +97,8 @@ class CollapsedBarOverlay extends ConsumerWidget {
                 ),
               ),
             ),
+
+            // Music Player Pill
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -103,67 +108,99 @@ class CollapsedBarOverlay extends ConsumerWidget {
                   ? screenWidth - (edgeMargin + circleSize + gap) * 2
                   : screenWidth - edgeMargin * 2,
               height: isCollapsed ? circleSize : 64,
-              child: GlassGroupedSection(
-                margin: EdgeInsets.zero,
+              child: GlassCard(
+                padding: EdgeInsets.zero,
                 shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-                children: [
-                  GlassListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    leading: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: song != null
-                          ? () =>
-                          ref.read(audioPlayerProvider.notifier).togglePlayPause()
-                          : null,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: song != null
-                              ? const LinearGradient(colors: [
-                            CupertinoColors.systemPink,
-                            CupertinoColors.systemPurple,
-                          ])
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: song != null
+                      ? () async {
+                    ref
+                        .read(isNowPlayingOpenProvider.notifier)
+                        .setOpen(true);
+                    await navigatorKey.currentState
+                        ?.push(nowPlayingPageRoute());
+                    ref
+                        .read(isNowPlayingOpenProvider.notifier)
+                        .setOpen(false);
+                  }
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: song != null
+                              ? () => ref
+                              .read(audioPlayerProvider.notifier)
+                              .togglePlayPause()
                               : null,
-                          color: song == null
-                              ? CupertinoColors.white.withValues(alpha: 0.15)
-                              : null,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: song != null
+                                  ? const LinearGradient(
+                                colors: [
+                                  CupertinoColors.systemPink,
+                                  CupertinoColors.systemPurple,
+                                ],
+                              )
+                                  : null,
+                              color: song == null
+                                  ? CupertinoColors.white.withValues(alpha: 0.15)
+                                  : null,
+                            ),
+                            child: Icon(
+                              song != null
+                                  ? (audioState.isPlaying
+                                  ? CupertinoIcons.pause_fill
+                                  : CupertinoIcons.play_fill)
+                                  : CupertinoIcons.music_note,
+                              color: CupertinoColors.white,
+                              size: 14,
+                            ),
+                          ),
                         ),
-                        child: Icon(
-                          song != null
-                              ? (audioState.isPlaying
-                              ? CupertinoIcons.pause_fill
-                              : CupertinoIcons.play_fill)
-                              : CupertinoIcons.music_note,
-                          color: CupertinoColors.white,
-                          size: 14,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                song?.title ?? 'Not Playing',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: CupertinoColors.label.resolveFrom(context),
+                                ),
+                              ),
+                              if (song != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  song.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    title: Text(
-                      song?.title ?? 'Not Playing',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: song != null
-                        ? Text(
-                      song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    )
-                        : null,
-                    onTap: song != null
-                        ? () async {
-                      ref.read(isNowPlayingOpenProvider.notifier).setOpen(true);
-                      await navigatorKey.currentState
-                          ?.push(nowPlayingPageRoute());
-                      ref.read(isNowPlayingOpenProvider.notifier).setOpen(false);
-                    }
-                        : null,
                   ),
-                ],
+                ),
               ),
             ),
           ],
