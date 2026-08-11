@@ -2,14 +2,16 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 
 class Song {
+  final String? id; // Idinagdag para maging entirely unique ang bawat kanta
   final String title;
   final String artist;
   final String? assetPath;
   final String? filePath;
-  final String? coverImagePath; // asset path — para sa bundled songs (mula sa album/playlist)
-  final String? coverFilePath;  // file path — para sa imported songs (via image_picker)
+  final String? coverImagePath;
+  final String? coverFilePath;
 
   const Song({
+    this.id,
     required this.title,
     required this.artist,
     this.assetPath,
@@ -19,9 +21,9 @@ class Song {
   }) : assert(assetPath != null || filePath != null,
   'Song must have either an assetPath or filePath');
 
-  String get identityKey => assetPath ?? filePath ?? '$title|$artist';
+  // Uunahin niyang gamitin ang unique ID, kapag null (sa sample data), fallback sa luma
+  String get identityKey => id ?? assetPath ?? filePath ?? '$title|$artist';
 
-  /// Ready-to-use na ImageProvider — file muna, tapos asset, tapos null.
   ImageProvider? get coverImageProvider {
     if (coverFilePath != null) return FileImage(File(coverFilePath!));
     if (coverImagePath != null) return AssetImage(coverImagePath!);
@@ -29,6 +31,7 @@ class Song {
   }
 
   Song copyWith({
+    String? id,
     String? title,
     String? artist,
     String? assetPath,
@@ -37,6 +40,7 @@ class Song {
     String? coverFilePath,
   }) {
     return Song(
+      id: id ?? this.id,
       title: title ?? this.title,
       artist: artist ?? this.artist,
       assetPath: assetPath ?? this.assetPath,
@@ -47,6 +51,7 @@ class Song {
   }
 
   Map<String, dynamic> toJson() => {
+    'id': id,
     'title': title,
     'artist': artist,
     'assetPath': assetPath,
@@ -56,6 +61,7 @@ class Song {
   };
 
   factory Song.fromJson(Map<String, dynamic> json) => Song(
+    id: json['id'] as String?,
     title: json['title'] as String,
     artist: json['artist'] as String,
     assetPath: json['assetPath'] as String?,

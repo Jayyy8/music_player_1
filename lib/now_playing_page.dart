@@ -166,36 +166,45 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
                     ),
                   ),
                   const Spacer(),
+                  // NA-UPDATE: Binago ang structure ng Stack para hindi mag-overlap at umangat ang text
                   Stack(
-                    alignment: Alignment.center,
+                    alignment: Alignment.bottomCenter,
                     children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: Column(
-                          children: [
-                            Text(song.title,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: CupertinoColors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                )),
-                            const SizedBox(height: 4),
-                            Text(song.artist,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: CupertinoColors.white.withValues(alpha: 0.65),
-                                  fontSize: 15,
-                                )),
-                          ],
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: 32, // Inangat nang konti para nasa ibaba niya ang '+' button
+                          left: 16,   // Padding sa gilid para mas malinis kapag nag-e-ellipsis
+                          right: 16,
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Column(
+                            children: [
+                              Text(song.title,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: CupertinoColors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  )),
+                              const SizedBox(height: 4),
+                              Text(song.artist,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: CupertinoColors.white.withValues(alpha: 0.65),
+                                    fontSize: 15,
+                                  )),
+                            ],
+                          ),
                         ),
                       ),
                       Positioned(
                         right: 0,
+                        bottom: 0, // Nakapirmi sa lower right corner ng Stack ang button
                         child: CupertinoButton(
                           padding: EdgeInsets.zero,
                           onPressed: () => _showAddToPlaylistSheet(context, ref, song),

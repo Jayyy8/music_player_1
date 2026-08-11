@@ -8,12 +8,12 @@ import 'music_models.dart';
 import 'music_audio_handler.dart';
 import 'sample_data.dart';
 
-// ---- Navigator key (para magamit ng mga widget na wala sa loob ng Navigator's context, gaya ng CollapsedBarOverlay) ----
+// ---- Navigator key ----
 final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
   return GlobalKey<NavigatorState>();
 });
 
-// ---- Audio handler (naka-initialize sa main() bago pa mag-runApp, itine-then override dito) ----
+// ---- Audio handler ----
 final audioHandlerProvider = Provider<MusicAudioHandler>((ref) {
   throw UnimplementedError('audioHandlerProvider must be overridden in main()');
 });
@@ -22,25 +22,19 @@ final audioHandlerProvider = Provider<MusicAudioHandler>((ref) {
 class SelectedIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
-
   void select(int index) => state = index;
 }
+final selectedIndexProvider = NotifierProvider<SelectedIndexNotifier, int>(SelectedIndexNotifier.new);
 
-final selectedIndexProvider =
-NotifierProvider<SelectedIndexNotifier, int>(SelectedIndexNotifier.new);
-
-// ---- Pill collapse state (scroll-driven) ----
+// ---- Pill collapse state ----
 class PillCollapsedNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-
   void setCollapsed(bool value) {
     if (state != value) state = value;
   }
 }
-
-final isPillCollapsedProvider =
-NotifierProvider<PillCollapsedNotifier, bool>(PillCollapsedNotifier.new);
+final isPillCollapsedProvider = NotifierProvider<PillCollapsedNotifier, bool>(PillCollapsedNotifier.new);
 
 final scrollControllerProvider = Provider<ScrollController>((ref) {
   final controller = ScrollController();
@@ -48,7 +42,7 @@ final scrollControllerProvider = Provider<ScrollController>((ref) {
   return controller;
 });
 
-// ---- Imported songs (mula sa device file picker, naka-save sa disk) ----
+// ---- Imported songs ----
 class ImportedSongsNotifier extends Notifier<List<Song>> {
   static const String _prefsKey = 'imported_songs';
 
@@ -61,9 +55,7 @@ class ImportedSongsNotifier extends Notifier<List<Song>> {
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStrings = prefs.getStringList(_prefsKey) ?? [];
-    state = jsonStrings
-        .map((s) => Song.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    state = jsonStrings.map((s) => Song.fromJson(jsonDecode(s) as Map<String, dynamic>)).toList();
   }
 
   Future<void> _saveToPrefs() async {
@@ -78,102 +70,87 @@ class ImportedSongsNotifier extends Notifier<List<Song>> {
   }
 
   Future<void> setSongCover(Song song, String filePath) async {
-    state = state
-        .map((s) => s.identityKey == song.identityKey
-        ? s.copyWith(coverFilePath: filePath)
-        : s)
-        .toList();
+    state = state.map((s) => s.identityKey == song.identityKey ? s.copyWith(coverFilePath: filePath) : s).toList();
     await _saveToPrefs();
   }
 
-  // --- BAGONG METHODS PARA SA EDIT AT DELETE NG IMPORTED SONGS ---
-
   Future<void> updateSongTitle(Song song, String newTitle) async {
-    state = state
-        .map((s) => s.identityKey == song.identityKey
-        ? s.copyWith(title: newTitle)
-        : s)
-        .toList();
+    state = state.map((s) => s.identityKey == song.identityKey ? s.copyWith(title: newTitle) : s).toList();
     await _saveToPrefs();
   }
 
   Future<void> updateSongArtist(Song song, String newArtist) async {
-    state = state
-        .map((s) => s.identityKey == song.identityKey
-        ? s.copyWith(artist: newArtist)
-        : s)
-        .toList();
+    state = state.map((s) => s.identityKey == song.identityKey ? s.copyWith(artist: newArtist) : s).toList();
     await _saveToPrefs();
   }
 
+  // --- COMPREHENSIVE DELETE (CASCADING) ---
   Future<void> removeSong(Song song) async {
+    // 1. Tanggalin sa List ng Imported Songs
     state = state.where((s) => s.identityKey != song.identityKey).toList();
     await _saveToPrefs();
+
+    // 2. Tanggalin sa Liked Songs kung sakaling naka-like
+    await ref.read(likedSongsProvider.notifier).removeLike(song.identityKey);
+
+    // 3. Tanggalin sa lahat ng existing Playlists
+    await ref.read(userPlaylistsProvider.notifier).removeSongFromAllPlaylists(song.identityKey);
+
+    // 4. Tanggalin sa Recently Played
+    await ref.read(recentlyPlayedProvider.notifier).removeSong(song.identityKey);
+
+    // 5. Tanggalin sa kasalukuyang Playback Queue para hindi na mapuntahan pag-next
+    ref.read(playbackQueueProvider.notifier).removeSong(song.identityKey);
+
+    // 6. Itigil agad ang audio player kung ang dinedelete ay ang currently playing
+    final audioState = ref.read(audioPlayerProvider);
+    if (audioState.currentSong?.identityKey == song.identityKey) {
+      await ref.read(audioPlayerProvider.notifier).stopAndClear();
+    }
   }
 }
+final importedSongsProvider = NotifierProvider<ImportedSongsNotifier, List<Song>>(ImportedSongsNotifier.new);
 
-final importedSongsProvider =
-NotifierProvider<ImportedSongsNotifier, List<Song>>(ImportedSongsNotifier.new);
-
-// ---- Featured songs (random na pinipili mula sa buong catalog, matatag habang session) ----
+// ---- Featured songs ----
 class FeaturedSongsNotifier extends Notifier<List<Song>> {
   static const int count = 5;
-
   @override
   List<Song> build() {
     final pool = <String, Song>{};
-    for (final s in allSongs) {
-      pool[s.identityKey] = s;
-    }
-    for (final p in samplePlaylists) {
-      for (final s in p.songs) {
-        pool[s.identityKey] = s;
-      }
-    }
+    for (final s in allSongs) { pool[s.identityKey] = s; }
+    for (final p in samplePlaylists) { for (final s in p.songs) { pool[s.identityKey] = s; } }
     final picks = pool.values.toList()..shuffle();
     return picks.take(count).toList();
   }
-
   void reshuffle() => ref.invalidateSelf();
 }
-
-final featuredSongsProvider =
-NotifierProvider<FeaturedSongsNotifier, List<Song>>(FeaturedSongsNotifier.new);
+final featuredSongsProvider = NotifierProvider<FeaturedSongsNotifier, List<Song>>(FeaturedSongsNotifier.new);
 
 // ---- Search query ----
 class SearchQueryNotifier extends Notifier<String> {
   @override
   String build() => '';
-
   void setQuery(String value) => state = value;
 }
-
-final searchQueryProvider =
-NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
+final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
 
 // ---- Now Playing page open state ----
 class NowPlayingOpenNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-
   void setOpen(bool value) => state = value;
 }
+final isNowPlayingOpenProvider = NotifierProvider<NowPlayingOpenNotifier, bool>(NowPlayingOpenNotifier.new);
 
-final isNowPlayingOpenProvider =
-NotifierProvider<NowPlayingOpenNotifier, bool>(NowPlayingOpenNotifier.new);
-
-// ---- Modal open state (para sa pag-angat ng pill kapag may bukas na action sheet) ----
+// ---- Modal open state ----
 class ModalOpenNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-
   void setOpen(bool value) => state = value;
 }
+final isModalOpenProvider = NotifierProvider<ModalOpenNotifier, bool>(ModalOpenNotifier.new);
 
-final isModalOpenProvider =
-NotifierProvider<ModalOpenNotifier, bool>(ModalOpenNotifier.new);
-
-// ---- Recently played songs (naka-save sa disk) ----
+// ---- Recently played songs ----
 class RecentlyPlayedNotifier extends Notifier<List<Song>> {
   static const int maxRecents = 15;
   static const String _prefsKey = 'recently_played_songs';
@@ -187,9 +164,7 @@ class RecentlyPlayedNotifier extends Notifier<List<Song>> {
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStrings = prefs.getStringList(_prefsKey) ?? [];
-    final loaded = jsonStrings
-        .map((s) => Song.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    final loaded = jsonStrings.map((s) => Song.fromJson(jsonDecode(s) as Map<String, dynamic>)).toList();
 
     final seenKeys = <String>{};
     final deduped = <Song>[];
@@ -212,20 +187,23 @@ class RecentlyPlayedNotifier extends Notifier<List<Song>> {
   }
 
   Future<void> addSong(Song song) async {
-    final withoutDuplicate = state
-        .where((s) =>
-    s.identityKey != song.identityKey &&
-        !(s.title == song.title && s.artist == song.artist))
-        .toList();
+    final withoutDuplicate = state.where((s) =>
+    s.identityKey != song.identityKey && !(s.title == song.title && s.artist == song.artist)).toList();
     state = [song, ...withoutDuplicate].take(maxRecents).toList();
     await _saveToPrefs();
   }
+
+  Future<void> removeSong(String songKey) async {
+    final newState = state.where((s) => s.identityKey != songKey).toList();
+    if (newState.length != state.length) {
+      state = newState;
+      await _saveToPrefs();
+    }
+  }
 }
+final recentlyPlayedProvider = NotifierProvider<RecentlyPlayedNotifier, List<Song>>(RecentlyPlayedNotifier.new);
 
-final recentlyPlayedProvider =
-NotifierProvider<RecentlyPlayedNotifier, List<Song>>(RecentlyPlayedNotifier.new);
-
-// ---- User-created playlists (naka-save sa disk) ----
+// ---- User-created playlists ----
 class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
   static const String _prefsKey = 'user_playlists';
 
@@ -238,9 +216,7 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStrings = prefs.getStringList(_prefsKey) ?? [];
-    state = jsonStrings
-        .map((s) => UserPlaylist.fromJson(jsonDecode(s) as Map<String, dynamic>))
-        .toList();
+    state = jsonStrings.map((s) => UserPlaylist.fromJson(jsonDecode(s) as Map<String, dynamic>)).toList();
   }
 
   Future<void> _saveToPrefs() async {
@@ -250,10 +226,7 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
   }
 
   Future<UserPlaylist> createPlaylist(String name) async {
-    final playlist = UserPlaylist(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name,
-    );
+    final playlist = UserPlaylist(id: DateTime.now().microsecondsSinceEpoch.toString(), name: name);
     state = [...state, playlist];
     await _saveToPrefs();
     return playlist;
@@ -283,8 +256,7 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
     state = state.map((p) {
       if (p.id != id) return p;
       final existingKeys = p.songs.map((s) => s.identityKey).toSet();
-      final newSongs =
-      songsToAdd.where((s) => !existingKeys.contains(s.identityKey));
+      final newSongs = songsToAdd.where((s) => !existingKeys.contains(s.identityKey));
       return p.copyWith(songs: [...p.songs, ...newSongs]);
     }).toList();
     await _saveToPrefs();
@@ -293,10 +265,22 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
   Future<void> removeSong(String id, Song song) async {
     state = state.map((p) {
       if (p.id != id) return p;
-      return p.copyWith(
-          songs: p.songs.where((s) => s.identityKey != song.identityKey).toList());
+      return p.copyWith(songs: p.songs.where((s) => s.identityKey != song.identityKey).toList());
     }).toList();
     await _saveToPrefs();
+  }
+
+  Future<void> removeSongFromAllPlaylists(String songKey) async {
+    bool changed = false;
+    final newState = state.map((p) {
+      final filtered = p.songs.where((s) => s.identityKey != songKey).toList();
+      if (filtered.length != p.songs.length) changed = true;
+      return p.copyWith(songs: filtered);
+    }).toList();
+    if (changed) {
+      state = newState;
+      await _saveToPrefs();
+    }
   }
 
   Future<void> reorderSongs(String id, int oldIndex, int newIndex) async {
@@ -312,12 +296,9 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
     await _saveToPrefs();
   }
 }
+final userPlaylistsProvider = NotifierProvider<UserPlaylistsNotifier, List<UserPlaylist>>(UserPlaylistsNotifier.new);
 
-final userPlaylistsProvider =
-NotifierProvider<UserPlaylistsNotifier, List<UserPlaylist>>(
-    UserPlaylistsNotifier.new);
-
-// ---- Liked albums (naka-save sa disk, gamit ang album title bilang key) ----
+// ---- Liked albums ----
 class LikedAlbumsNotifier extends Notifier<Set<String>> {
   static const String _prefsKey = 'liked_albums';
 
@@ -349,11 +330,9 @@ class LikedAlbumsNotifier extends Notifier<Set<String>> {
     await _saveToPrefs();
   }
 }
+final likedAlbumsProvider = NotifierProvider<LikedAlbumsNotifier, Set<String>>(LikedAlbumsNotifier.new);
 
-final likedAlbumsProvider =
-NotifierProvider<LikedAlbumsNotifier, Set<String>>(LikedAlbumsNotifier.new);
-
-// ---- Liked playlists (naka-save sa disk, gamit ang playlist title bilang key) ----
+// ---- Liked playlists ----
 class LikedPlaylistsNotifier extends Notifier<Set<String>> {
   static const String _prefsKey = 'liked_playlists';
 
@@ -385,11 +364,52 @@ class LikedPlaylistsNotifier extends Notifier<Set<String>> {
     await _saveToPrefs();
   }
 }
+final likedPlaylistsProvider = NotifierProvider<LikedPlaylistsNotifier, Set<String>>(LikedPlaylistsNotifier.new);
 
-final likedPlaylistsProvider =
-NotifierProvider<LikedPlaylistsNotifier, Set<String>>(LikedPlaylistsNotifier.new);
+// ---- Liked songs ----
+class LikedSongsNotifier extends Notifier<Set<String>> {
+  static const String _prefsKey = 'liked_songs';
 
-// ---- Playback queue (para sa next/previous at shuffle) ----
+  @override
+  Set<String> build() {
+    _loadFromPrefs();
+    return {};
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_prefsKey) ?? [];
+    state = list.toSet();
+  }
+
+  Future<void> _saveToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKey, state.toList());
+  }
+
+  Future<void> toggleLike(String songKey) async {
+    final updated = {...state};
+    if (updated.contains(songKey)) {
+      updated.remove(songKey);
+    } else {
+      updated.add(songKey);
+    }
+    state = updated;
+    await _saveToPrefs();
+  }
+
+  Future<void> removeLike(String songKey) async {
+    if (state.contains(songKey)) {
+      final updated = {...state};
+      updated.remove(songKey);
+      state = updated;
+      await _saveToPrefs();
+    }
+  }
+}
+final likedSongsProvider = NotifierProvider<LikedSongsNotifier, Set<String>>(LikedSongsNotifier.new);
+
+// ---- Playback queue ----
 class PlaybackQueueState {
   final List<Song> songs;
   final int currentIndex;
@@ -435,8 +455,7 @@ class PlaybackQueueNotifier extends Notifier<PlaybackQueueState> {
       state = state.copyWith(songs: songs, currentIndex: 0, shuffledOrder: []);
       return;
     }
-    final startIndex =
-    songs.indexWhere((s) => s.identityKey == startSong.identityKey);
+    final startIndex = songs.indexWhere((s) => s.identityKey == startSong.identityKey);
     final safeStartIndex = startIndex == -1 ? 0 : startIndex;
 
     if (state.shuffleEnabled) {
@@ -488,8 +507,7 @@ class PlaybackQueueNotifier extends Notifier<PlaybackQueueState> {
 
   Song? next() {
     if (state.songs.isEmpty) return null;
-    final length =
-    state.shuffleEnabled ? state.shuffledOrder.length : state.songs.length;
+    final length = state.shuffleEnabled ? state.shuffledOrder.length : state.songs.length;
     final newIndex = (state.currentIndex + 1) % length;
     state = state.copyWith(currentIndex: newIndex);
     return currentSong;
@@ -497,17 +515,31 @@ class PlaybackQueueNotifier extends Notifier<PlaybackQueueState> {
 
   Song? previous() {
     if (state.songs.isEmpty) return null;
-    final length =
-    state.shuffleEnabled ? state.shuffledOrder.length : state.songs.length;
+    final length = state.shuffleEnabled ? state.shuffledOrder.length : state.songs.length;
     final newIndex = (state.currentIndex - 1 + length) % length;
     state = state.copyWith(currentIndex: newIndex);
     return currentSong;
   }
-}
 
-final playbackQueueProvider =
-NotifierProvider<PlaybackQueueNotifier, PlaybackQueueState>(
-    PlaybackQueueNotifier.new);
+  void removeSong(String songKey) {
+    final newSongs = state.songs.where((s) => s.identityKey != songKey).toList();
+    if (newSongs.length != state.songs.length) {
+      if (newSongs.isEmpty) {
+        state = const PlaybackQueueState();
+      } else {
+        int newIdx = state.currentIndex;
+        if (newIdx >= newSongs.length) newIdx = 0;
+        state = PlaybackQueueState(
+          songs: newSongs,
+          currentIndex: newIdx,
+          shuffleEnabled: false,
+          shuffledOrder: const [],
+        );
+      }
+    }
+  }
+}
+final playbackQueueProvider = NotifierProvider<PlaybackQueueNotifier, PlaybackQueueState>(PlaybackQueueNotifier.new);
 
 // ---- Audio playback ----
 class AudioPlayerState {
@@ -612,8 +644,6 @@ class AudioPlayerNotifier extends Notifier<AudioPlayerState> {
     } else if (song.filePath != null) {
       await playFile(song);
     }
-    // Fire-and-forget: hindi na natin hinihintay matapos ang pag-save
-    // sa disk bago tumugtog ang kanta — mas mabilis ngayon ang switch.
     ref.read(recentlyPlayedProvider.notifier).addSong(song);
   }
 
@@ -647,57 +677,29 @@ class AudioPlayerNotifier extends Notifier<AudioPlayerState> {
   Future<void> seek(Duration position) async {
     await _handler.seek(position);
   }
-}
 
-final audioPlayerProvider = NotifierProvider<AudioPlayerNotifier, AudioPlayerState>(
-    AudioPlayerNotifier.new);
+  Future<void> stopAndClear() async {
+    await _handler.pause();
+    // Bypass copyWith restriction pag nagse-set sa null
+    state = AudioPlayerState(
+      currentSong: null,
+      isPlaying: false,
+      position: Duration.zero,
+      duration: Duration.zero,
+      repeatOneEnabled: state.repeatOneEnabled,
+    );
+  }
+}
+final audioPlayerProvider = NotifierProvider<AudioPlayerNotifier, AudioPlayerState>(AudioPlayerNotifier.new);
 
 // ---- Search bar expand/collapse ----
 class IsSearchingNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-
   void setSearching(bool value) => state = value;
 }
+final isSearchingProvider = NotifierProvider<IsSearchingNotifier, bool>(IsSearchingNotifier.new);
 
-final isSearchingProvider =
-NotifierProvider<IsSearchingNotifier, bool>(IsSearchingNotifier.new);
-
-// ---- Liked songs (naka-save sa disk, gamit ang song identityKey bilang key) ----
-class LikedSongsNotifier extends Notifier<Set<String>> {
-  static const String _prefsKey = 'liked_songs';
-
-  @override
-  Set<String> build() {
-    _loadFromPrefs();
-    return {};
-  }
-
-  Future<void> _loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_prefsKey) ?? [];
-    state = list.toSet();
-  }
-
-  Future<void> _saveToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_prefsKey, state.toList());
-  }
-
-  Future<void> toggleLike(String songKey) async {
-    final updated = {...state};
-    if (updated.contains(songKey)) {
-      updated.remove(songKey);
-    } else {
-      updated.add(songKey);
-    }
-    state = updated;
-    await _saveToPrefs();
-  }
-}
-
-final likedSongsProvider =
-NotifierProvider<LikedSongsNotifier, Set<String>>(LikedSongsNotifier.new);
 
 // ---- View mode ng "All Songs" section (list o grid) ----
 enum SongsViewMode { list, grid }
@@ -705,40 +707,31 @@ enum SongsViewMode { list, grid }
 class SongsViewModeNotifier extends Notifier<SongsViewMode> {
   @override
   SongsViewMode build() => SongsViewMode.list;
-
   void toggle() {
     state = state == SongsViewMode.list ? SongsViewMode.grid : SongsViewMode.list;
   }
 }
+final songsViewModeProvider = NotifierProvider<SongsViewModeNotifier, SongsViewMode>(SongsViewModeNotifier.new);
 
-final songsViewModeProvider =
-NotifierProvider<SongsViewModeNotifier, SongsViewMode>(SongsViewModeNotifier.new);
-
-// ---- Custom order ng "All Songs" (list ng identityKeys, naka-save sa disk) ----
+// ---- Custom order ng "All Songs" ----
 class AllSongsOrderNotifier extends Notifier<List<String>> {
   static const String _prefsKey = 'all_songs_order';
-
   @override
   List<String> build() {
     _loadFromPrefs();
     return [];
   }
-
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     state = prefs.getStringList(_prefsKey) ?? [];
   }
-
   Future<void> _saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_prefsKey, state);
   }
-
   Future<void> setOrder(List<String> keys) async {
     state = keys;
     await _saveToPrefs();
   }
 }
-
-final allSongsOrderProvider =
-NotifierProvider<AllSongsOrderNotifier, List<String>>(AllSongsOrderNotifier.new);
+final allSongsOrderProvider = NotifierProvider<AllSongsOrderNotifier, List<String>>(AllSongsOrderNotifier.new);

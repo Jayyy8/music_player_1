@@ -19,11 +19,11 @@ class MusicLibrary extends ConsumerWidget {
     return dotIndex == -1 ? filename : filename.substring(0, dotIndex);
   }
 
-  Future<void> _importFiles(WidgetRef ref) async {
+  // --- NA-UPDATE: Nagkaroon ng dialog para sa duplicate files ---
+  Future<void> _importFiles(BuildContext context, WidgetRef ref) async {
     const audioTypeGroup = XTypeGroup(
       label: 'audio',
       extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
-      // Idinagdag para makilala ng iOS file picker ang mga audio files
       uniformTypeIdentifiers: [
         'public.audio',
         'public.mp3',
@@ -37,15 +37,64 @@ class MusicLibrary extends ConsumerWidget {
     final files = await openFiles(acceptedTypeGroups: [audioTypeGroup]);
     if (files.isEmpty) return;
 
-    final songs = files
-        .map((f) => Song(
-      title: _stripExtension(f.name),
-      artist: 'Imported',
-      filePath: f.path,
-    ))
-        .toList();
+    final importedSongs = ref.read(importedSongsProvider);
 
-    ref.read(importedSongsProvider.notifier).addSongs(songs);
+    for (final f in files) {
+      if (!context.mounted) return;
+
+      final existingSong = importedSongs.where((s) => s.filePath == f.path).firstOrNull;
+      bool shouldAdd = true;
+      bool overwrite = false;
+
+      if (existingSong != null) {
+        final action = await showCupertinoDialog<String>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Duplicate File'),
+            content: Text('Nai-import na ang "${f.name}". Ano ang gusto mong gawin?'),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(ctx).pop('keep_both'),
+                child: const Text('Keep Both'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.of(ctx).pop('overwrite'),
+                child: const Text('Overwrite'),
+              ),
+            ],
+          ),
+        );
+
+        if (action == 'overwrite') {
+          overwrite = true;
+        } else if (action == 'keep_both') {
+          overwrite = false;
+        } else {
+          shouldAdd = false;
+        }
+      }
+
+      if (shouldAdd) {
+        if (overwrite && existingSong != null) {
+          // Kung overwrite, ide-delete niya yung lumang instance (kasama sa mga playlists at likes)
+          await ref.read(importedSongsProvider.notifier).removeSong(existingSong);
+        }
+
+        final newSong = Song(
+          // Guaranteed unique ID dahil meron na itong timestamp prefix
+          id: '${DateTime.now().microsecondsSinceEpoch}_${f.name}',
+          title: _stripExtension(f.name),
+          artist: 'Imported',
+          filePath: f.path,
+        );
+        await ref.read(importedSongsProvider.notifier).addSongs([newSong]);
+      }
+    }
   }
 
   Future<void> _changeSongCover(WidgetRef ref, Song song) async {
@@ -273,7 +322,8 @@ class MusicLibrary extends ConsumerWidget {
                       fontWeight: FontWeight.bold)),
               CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: () => _importFiles(ref),
+                // -- Ipinasa na ang context sa function call na ito --
+                onPressed: () => _importFiles(context, ref),
                 child: const Icon(CupertinoIcons.add_circled,
                     color: CupertinoColors.white, size: 28),
               ),
