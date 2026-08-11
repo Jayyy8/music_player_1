@@ -3,25 +3,26 @@ workflows:
     name: iOS Unsigned Build (Free Sideload via AltStore/SideStore)
     max_build_duration: 60
     instance_type: mac_mini_m2
+
     environment:
       flutter: stable
       xcode: latest
-      cocoapods: default
+
     scripts:
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios && pod install
+          flutter pub get
+
       - name: Build unsigned iOS app
         script: |
           flutter build ios --release --no-codesign
-      - name: Package into unsigned .ipa
+
+      - name: Package into unsigned IPA
         script: |
           mkdir -p build/ios/iphoneos/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
+          cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
           cd build/ios/iphoneos
           zip -r music_player.ipa Payload
+
     artifacts:
       - build/ios/iphoneos/music_player.ipa
