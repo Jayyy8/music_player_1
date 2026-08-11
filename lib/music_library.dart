@@ -19,7 +19,6 @@ class MusicLibrary extends ConsumerWidget {
     return dotIndex == -1 ? filename : filename.substring(0, dotIndex);
   }
 
-  // --- NA-UPDATE: Nagkaroon ng dialog para sa duplicate files ---
   Future<void> _importFiles(BuildContext context, WidgetRef ref) async {
     const audioTypeGroup = XTypeGroup(
       label: 'audio',
@@ -51,7 +50,7 @@ class MusicLibrary extends ConsumerWidget {
           context: context,
           builder: (ctx) => CupertinoAlertDialog(
             title: const Text('Duplicate File'),
-            content: Text('Nai-import na ang "${f.name}". Ano ang gusto mong gawin?'),
+            content: Text('You have already imported "${f.name}". What would you like to do?'),
             actions: [
               CupertinoDialogAction(
                 onPressed: () => Navigator.of(ctx).pop('cancel'),
@@ -81,12 +80,10 @@ class MusicLibrary extends ConsumerWidget {
 
       if (shouldAdd) {
         if (overwrite && existingSong != null) {
-          // Kung overwrite, ide-delete niya yung lumang instance (kasama sa mga playlists at likes)
           await ref.read(importedSongsProvider.notifier).removeSong(existingSong);
         }
 
         final newSong = Song(
-          // Guaranteed unique ID dahil meron na itong timestamp prefix
           id: '${DateTime.now().microsecondsSinceEpoch}_${f.name}',
           title: _stripExtension(f.name),
           artist: 'Imported',
@@ -142,7 +139,7 @@ class MusicLibrary extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: const Text('Delete Song'),
-        content: Text('Delete "${song.title}"? Hindi na ito mababawi.'),
+        content: Text('Delete "${song.title}"? This action cannot be undone.'),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
