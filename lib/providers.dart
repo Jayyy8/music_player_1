@@ -8,17 +8,15 @@ import 'music_models.dart';
 import 'music_audio_handler.dart';
 import 'sample_data.dart';
 
-// ---- Navigator key ----
 final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
   return GlobalKey<NavigatorState>();
 });
 
-// ---- Audio handler ----
+
 final audioHandlerProvider = Provider<MusicAudioHandler>((ref) {
   throw UnimplementedError('audioHandlerProvider must be overridden in main()');
 });
 
-// ---- Tab selection ----
 class SelectedIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -26,7 +24,6 @@ class SelectedIndexNotifier extends Notifier<int> {
 }
 final selectedIndexProvider = NotifierProvider<SelectedIndexNotifier, int>(SelectedIndexNotifier.new);
 
-// ---- Pill collapse state ----
 class PillCollapsedNotifier extends Notifier<bool> {
   @override
   bool build() => false;
@@ -42,7 +39,6 @@ final scrollControllerProvider = Provider<ScrollController>((ref) {
   return controller;
 });
 
-// ---- Imported songs ----
 class ImportedSongsNotifier extends Notifier<List<Song>> {
   static const String _prefsKey = 'imported_songs';
 
@@ -84,25 +80,13 @@ class ImportedSongsNotifier extends Notifier<List<Song>> {
     await _saveToPrefs();
   }
 
-  // --- COMPREHENSIVE DELETE (CASCADING) ---
   Future<void> removeSong(Song song) async {
-    // 1. Tanggalin sa List ng Imported Songs
     state = state.where((s) => s.identityKey != song.identityKey).toList();
     await _saveToPrefs();
-
-    // 2. Tanggalin sa Liked Songs kung sakaling naka-like
     await ref.read(likedSongsProvider.notifier).removeLike(song.identityKey);
-
-    // 3. Tanggalin sa lahat ng existing Playlists
     await ref.read(userPlaylistsProvider.notifier).removeSongFromAllPlaylists(song.identityKey);
-
-    // 4. Tanggalin sa Recently Played
     await ref.read(recentlyPlayedProvider.notifier).removeSong(song.identityKey);
-
-    // 5. Tanggalin sa kasalukuyang Playback Queue para hindi na mapuntahan pag-next
     ref.read(playbackQueueProvider.notifier).removeSong(song.identityKey);
-
-    // 6. Itigil agad ang audio player kung ang dinedelete ay ang currently playing
     final audioState = ref.read(audioPlayerProvider);
     if (audioState.currentSong?.identityKey == song.identityKey) {
       await ref.read(audioPlayerProvider.notifier).stopAndClear();
@@ -111,7 +95,6 @@ class ImportedSongsNotifier extends Notifier<List<Song>> {
 }
 final importedSongsProvider = NotifierProvider<ImportedSongsNotifier, List<Song>>(ImportedSongsNotifier.new);
 
-// ---- Featured songs ----
 class FeaturedSongsNotifier extends Notifier<List<Song>> {
   static const int count = 5;
   @override
@@ -126,7 +109,6 @@ class FeaturedSongsNotifier extends Notifier<List<Song>> {
 }
 final featuredSongsProvider = NotifierProvider<FeaturedSongsNotifier, List<Song>>(FeaturedSongsNotifier.new);
 
-// ---- Search query ----
 class SearchQueryNotifier extends Notifier<String> {
   @override
   String build() => '';
@@ -134,7 +116,6 @@ class SearchQueryNotifier extends Notifier<String> {
 }
 final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
 
-// ---- Now Playing page open state ----
 class NowPlayingOpenNotifier extends Notifier<bool> {
   @override
   bool build() => false;
@@ -142,15 +123,12 @@ class NowPlayingOpenNotifier extends Notifier<bool> {
 }
 final isNowPlayingOpenProvider = NotifierProvider<NowPlayingOpenNotifier, bool>(NowPlayingOpenNotifier.new);
 
-// ---- Modal open state ----
 class ModalOpenNotifier extends Notifier<bool> {
   @override
   bool build() => false;
   void setOpen(bool value) => state = value;
 }
 final isModalOpenProvider = NotifierProvider<ModalOpenNotifier, bool>(ModalOpenNotifier.new);
-
-// ---- Recently played songs ----
 class RecentlyPlayedNotifier extends Notifier<List<Song>> {
   static const int maxRecents = 15;
   static const String _prefsKey = 'recently_played_songs';
@@ -203,7 +181,6 @@ class RecentlyPlayedNotifier extends Notifier<List<Song>> {
 }
 final recentlyPlayedProvider = NotifierProvider<RecentlyPlayedNotifier, List<Song>>(RecentlyPlayedNotifier.new);
 
-// ---- User-created playlists ----
 class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
   static const String _prefsKey = 'user_playlists';
 
@@ -298,7 +275,6 @@ class UserPlaylistsNotifier extends Notifier<List<UserPlaylist>> {
 }
 final userPlaylistsProvider = NotifierProvider<UserPlaylistsNotifier, List<UserPlaylist>>(UserPlaylistsNotifier.new);
 
-// ---- Liked albums ----
 class LikedAlbumsNotifier extends Notifier<Set<String>> {
   static const String _prefsKey = 'liked_albums';
 
@@ -332,7 +308,6 @@ class LikedAlbumsNotifier extends Notifier<Set<String>> {
 }
 final likedAlbumsProvider = NotifierProvider<LikedAlbumsNotifier, Set<String>>(LikedAlbumsNotifier.new);
 
-// ---- Liked playlists ----
 class LikedPlaylistsNotifier extends Notifier<Set<String>> {
   static const String _prefsKey = 'liked_playlists';
 
@@ -366,7 +341,6 @@ class LikedPlaylistsNotifier extends Notifier<Set<String>> {
 }
 final likedPlaylistsProvider = NotifierProvider<LikedPlaylistsNotifier, Set<String>>(LikedPlaylistsNotifier.new);
 
-// ---- Liked songs ----
 class LikedSongsNotifier extends Notifier<Set<String>> {
   static const String _prefsKey = 'liked_songs';
 
@@ -409,7 +383,6 @@ class LikedSongsNotifier extends Notifier<Set<String>> {
 }
 final likedSongsProvider = NotifierProvider<LikedSongsNotifier, Set<String>>(LikedSongsNotifier.new);
 
-// ---- Playback queue ----
 class PlaybackQueueState {
   final List<Song> songs;
   final int currentIndex;
@@ -541,7 +514,6 @@ class PlaybackQueueNotifier extends Notifier<PlaybackQueueState> {
 }
 final playbackQueueProvider = NotifierProvider<PlaybackQueueNotifier, PlaybackQueueState>(PlaybackQueueNotifier.new);
 
-// ---- Audio playback ----
 class AudioPlayerState {
   final Song? currentSong;
   final bool isPlaying;
@@ -680,7 +652,6 @@ class AudioPlayerNotifier extends Notifier<AudioPlayerState> {
 
   Future<void> stopAndClear() async {
     await _handler.pause();
-    // Bypass copyWith restriction pag nagse-set sa null
     state = AudioPlayerState(
       currentSong: null,
       isPlaying: false,
@@ -691,8 +662,6 @@ class AudioPlayerNotifier extends Notifier<AudioPlayerState> {
   }
 }
 final audioPlayerProvider = NotifierProvider<AudioPlayerNotifier, AudioPlayerState>(AudioPlayerNotifier.new);
-
-// ---- Search bar expand/collapse ----
 class IsSearchingNotifier extends Notifier<bool> {
   @override
   bool build() => false;
@@ -700,8 +669,6 @@ class IsSearchingNotifier extends Notifier<bool> {
 }
 final isSearchingProvider = NotifierProvider<IsSearchingNotifier, bool>(IsSearchingNotifier.new);
 
-
-// ---- View mode ng "All Songs" section (list o grid) ----
 enum SongsViewMode { list, grid }
 
 class SongsViewModeNotifier extends Notifier<SongsViewMode> {
@@ -713,7 +680,6 @@ class SongsViewModeNotifier extends Notifier<SongsViewMode> {
 }
 final songsViewModeProvider = NotifierProvider<SongsViewModeNotifier, SongsViewMode>(SongsViewModeNotifier.new);
 
-// ---- Custom order ng "All Songs" ----
 class AllSongsOrderNotifier extends Notifier<List<String>> {
   static const String _prefsKey = 'all_songs_order';
   @override

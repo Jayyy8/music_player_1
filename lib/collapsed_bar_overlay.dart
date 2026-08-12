@@ -35,7 +35,6 @@ class CollapsedBarOverlay extends ConsumerWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Home Button
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -71,7 +70,6 @@ class CollapsedBarOverlay extends ConsumerWidget {
               ),
             ),
 
-            // Search Button
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
@@ -98,7 +96,6 @@ class CollapsedBarOverlay extends ConsumerWidget {
               ),
             ),
 
-            // Music Player Pill
             AnimatedPositioned(
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 
 class Song {
-  final String? id; // Idinagdag para maging entirely unique ang bawat kanta
+  final String? id;
   final String title;
   final String artist;
   final String? assetPath;
@@ -21,7 +21,7 @@ class Song {
   }) : assert(assetPath != null || filePath != null,
   'Song must have either an assetPath or filePath');
 
-  // Uunahin niyang gamitin ang unique ID, kapag null (sa sample data), fallback sa luma
+
   String get identityKey => id ?? assetPath ?? filePath ?? '$title|$artist';
 
   ImageProvider? get coverImageProvider {
